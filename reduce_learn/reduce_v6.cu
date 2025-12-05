@@ -138,7 +138,7 @@ int main() {
   cudaMalloc((void **)&d_a, N * sizeof(float));
 
   // 设置block配置参数
-  const int block_size = 1024;  // 每个block的线程数
+  const int block_size = 1024; //设置block的数量
   const unsigned int NUM_PER_BLOCK = (N + block_size - 1) / block_size;
   const int NUM_PER_THREAD = (NUM_PER_BLOCK + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK;
   

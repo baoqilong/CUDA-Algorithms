@@ -1,38 +1,15 @@
-# Build directories
-build/
-cmake-build-*/
-out/
+# 忽略所有文件和文件夹
+/*
 
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-compile_commands.json
+# 但跟踪reduce_learn文件夹
+!reduce_learn/
 
-# Compiled binaries
-reduce*
-!reduce*.cu
-
-# CUDA specific
-*.o
-*.obj
-*.exe
-*.out
-*.app
-*.i
-*.s
-*.ko
-*.elf
-*.dSYM/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
+# 忽略reduce_learn中的build目录
+reduce_learn/build/
+reduce_learn/CMakeCache.txt
+reduce_learn/CMakeFiles/
+reduce_learn/Makefile
+reduce_learn/cmake_install.cmake
+reduce_learn/compile_commands.json
+reduce_learn/reduce*
+!reduce_learn/reduce*.cu
