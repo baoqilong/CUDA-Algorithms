@@ -58,6 +58,10 @@ add_executable(reduce_v6
     reduce_v6.cu
 )
 
+add_executable(reduce_v7
+    reduce_v7.cu
+)
+
 # 为每个目标设置CUDA架构
 set_property(TARGET reduce_base PROPERTY CUDA_ARCHITECTURES 75)
 set_property(TARGET reduce_v0 PROPERTY CUDA_ARCHITECTURES 75)
@@ -67,6 +71,7 @@ set_property(TARGET reduce_v3 PROPERTY CUDA_ARCHITECTURES 75)
 set_property(TARGET reduce_v4 PROPERTY CUDA_ARCHITECTURES 75)
 set_property(TARGET reduce_v5 PROPERTY CUDA_ARCHITECTURES 75)
 set_property(TARGET reduce_v6 PROPERTY CUDA_ARCHITECTURES 75)
+set_property(TARGET reduce_v7 PROPERTY CUDA_ARCHITECTURES 75)
 
 # 链接CUDA库和线程库
 foreach(target reduce_base reduce_v0 reduce_v1)

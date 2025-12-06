@@ -4,10 +4,13 @@
 #include "reduce.cuh"
 
 /*
- * reduce_baseline: 最基础的CUDA归约实现
+ * reduce_base: 最基础的CUDA归约实现（基准版本）
  * 特点：直接在全局内存中进行归约操作
- * 缺点：全局内存访问速度慢，存在大量重复读写
- * 优点：实现简单，易于理解
+ * 问题：
+ * - 全局内存访问频繁，性能瓶颈明显
+ * - 线程发散严重，线程利用率低
+ * - 内存访问模式不连续，cache不友好
+ * 优化方向：作为性能基准，后续版本将逐步优化这些问题
  */
 
 __global__ void reduce_baseline(float* d_in, float* d_out, int n) {
@@ -46,18 +49,18 @@ int main() {
   float *d_a;
   cudaMalloc((void **)&d_a, N * sizeof(float));
 
-  int block_size = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK;
-  float *out = (float *)calloc(block_size, sizeof(float));
+  int block_num = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK;
+  float *out = (float *)calloc(block_num, sizeof(float));
   float *d_out;
-  cudaMalloc((void **)&d_out, block_size * sizeof(float));
-  float *res = (float *)malloc(block_size * sizeof(float));
+  cudaMalloc((void **)&d_out, block_num * sizeof(float));
+  float *res = (float *)malloc(block_num * sizeof(float));
 
   for (int i = 0; i < N; ++i) {
     a[i] = i % 100;
   }
 
   // CPU上的规约 - 作为参考结果
-  for (int i = 0; i < block_size; ++i) {
+  for (int i = 0; i < block_num; ++i) {
     float cur = 0;
     for (int j = 0; j < THREAD_PER_BLOCK; j++) {
       cur += a[i * THREAD_PER_BLOCK + j];
@@ -67,11 +70,11 @@ int main() {
 
   cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
 
-  dim3 Grid(block_size, 1);
+  dim3 Grid(block_num, 1);
   dim3 Block(THREAD_PER_BLOCK, 1);
   reduce_baseline<<<Grid, Block>>>(d_a, d_out, N);
-  cudaMemcpy(out, d_out, block_size * sizeof(float), cudaMemcpyDeviceToHost);
-  if (check(out, res, block_size))
+  cudaMemcpy(out, d_out, block_num * sizeof(float), cudaMemcpyDeviceToHost);
+  if (check(out, res, block_num))
     printf("the ans is right\n");
   else {
     printf("the ans is wrong\n");

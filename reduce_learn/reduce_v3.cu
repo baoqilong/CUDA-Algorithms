@@ -4,9 +4,13 @@
 #include "reduce.cuh"
 
 /*
- * reduce_v3: 每个线程加载两个元素的归约实现
- * 改进点：线程数量不变
- * 每个线程负责两个相邻元素的初始加载和预归约
+ * reduce_v3: 多元素预处理的归约实现
+ * 改进点：每个线程处理多个元素进行预归约
+ * 优势：
+ * - 减少后续归约阶段的线程数量
+ * - 提高并行度利用率
+ * - 减少线程调度开销
+ * 技术细节：每个线程负责两个元素的初始加载和预归约
  */
 
 __global__ void reduce_v3(float *d_in, float *d_out, int n) { 
@@ -49,18 +53,18 @@ int main() {
   float *d_a;
   cudaMalloc((void **)&d_a, N * sizeof(float));
 
-  int block_size = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK / 2;
-  float *out = (float *)calloc(block_size, sizeof(float));
+  int block_num = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK / 2;
+  float *out = (float *)calloc(block_num, sizeof(float));
   float *d_out;
-  cudaMalloc((void **)&d_out, block_size * sizeof(float));
-  float *res = (float *)malloc(block_size * sizeof(float));
+  cudaMalloc((void **)&d_out, block_num * sizeof(float));
+  float *res = (float *)malloc(block_num * sizeof(float));
 
   for (int i = 0; i < N; ++i) {
     a[i] = i % 100;
   }
 
   // CPU上的规约
-  for (int i = 0; i < block_size; ++i) {
+  for (int i = 0; i < block_num; ++i) {
     float cur = 0;
     for (int j = 0; j < THREAD_PER_BLOCK * 2; j++) {
       cur += a[i * THREAD_PER_BLOCK * 2 + j];
@@ -70,15 +74,15 @@ int main() {
 
   cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
 
-  dim3 Grid(block_size, 1);
+  dim3 Grid(block_num, 1);
   dim3 Block(THREAD_PER_BLOCK, 1);
   reduce_v3<<<Grid, Block>>>(d_a, d_out, N);
-  cudaMemcpy(out, d_out, block_size * sizeof(float), cudaMemcpyDeviceToHost);
-  if (check(out, res, block_size))
+  cudaMemcpy(out, d_out, block_num * sizeof(float), cudaMemcpyDeviceToHost);
+  if (check(out, res, block_num))
     printf("the ans is right\n");
   else {
     printf("the ans is wrong\n");
-    for (int i = 0; i < block_size; i++) {
+    for (int i = 0; i < block_num; i++) {
       printf("%lf ", out[i]);
     }
     printf("\n");

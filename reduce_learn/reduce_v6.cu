@@ -4,11 +4,15 @@
 #include "reduce.cuh"
 
 /*
- * reduce_v6: 优化的CUDA归约算法实现
- * 特点：
- * 1. 每个线程处理多个元素，减少线程块数量
- * 2. 使用warp级别的原生指令优化最后32个线程的归约
- * 3. 完全展开循环以避免分支判断
+ * reduce_v6: 综合优化的归约实现
+ * 特点：结合了前几个版本的所有优化技术
+ * 优化策略：
+ * 1. 多元素预处理减少线程数量
+ * 2. 共享内存归约减少全局内存访问
+ * 3. Warp级别优化最后阶段
+ * 4. 模板化编译优化
+ * 5. 手动循环展开避免分支判断
+ * 性能：
  */
 
 /**
@@ -138,14 +142,14 @@ int main() {
   cudaMalloc((void **)&d_a, N * sizeof(float));
 
   // 设置block配置参数
-  const int block_size = 1024; //设置block的数量
-  const unsigned int NUM_PER_BLOCK = (N + block_size - 1) / block_size;
+  const int block_num = 1024; //设置block的数量
+  const unsigned int NUM_PER_BLOCK = (N + block_num - 1) / block_num;
   const int NUM_PER_THREAD = (NUM_PER_BLOCK + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK;
   
-  float *out = (float *)calloc(block_size, sizeof(float));
+  float *out = (float *)calloc(block_num, sizeof(float));
   float *d_out;
-  cudaMalloc((void **)&d_out, block_size * sizeof(float));
-  float *res = (float *)malloc(block_size * sizeof(float));
+  cudaMalloc((void **)&d_out, block_num * sizeof(float));
+  float *res = (float *)malloc(block_num * sizeof(float));
 
   // 初始化测试数据
   for (int i = 0; i < N; ++i) {
@@ -153,7 +157,7 @@ int main() {
   }
 
   // CPU上的规约计算 - 作为参考结果
-  for (int i = 0; i < block_size; ++i) {
+  for (int i = 0; i < block_num; ++i) {
     float cur = 0;
     for (int j = 0; j < NUM_PER_BLOCK; j++) {
       cur += a[i * NUM_PER_BLOCK + j];
@@ -165,21 +169,21 @@ int main() {
   cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
 
   // 配置CUDA执行参数
-  dim3 Grid(block_size, 1);      // Grid维度
+  dim3 Grid(block_num, 1);      // Grid维度
   dim3 Block(THREAD_PER_BLOCK, 1);  // Block维度
   
   // 执行GPU归约计算
   reduce_v6<THREAD_PER_BLOCK, NUM_PER_THREAD><<<Grid, Block>>>(d_a, d_out, N);
   
   // 将结果从设备复制回主机
-  cudaMemcpy(out, d_out, block_size * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(out, d_out, block_num * sizeof(float), cudaMemcpyDeviceToHost);
   
   // 验证计算结果
-  if (check(out, res, block_size))
+  if (check(out, res, block_num))
     printf("the ans is right\n");
   else {
     printf("the ans is wrong\n");
-    for (int i = 0; i < block_size; i++) {
+    for (int i = 0; i < block_num; i++) {
       printf("%lf ", out[i]);
     }
     printf("\n");

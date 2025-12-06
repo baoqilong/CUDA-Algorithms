@@ -4,9 +4,15 @@
 #include "reduce.cuh"
 
 /*
- * reduce_v5: 模板化的warp优化归约实现
- * 改进点：使用模板参数在编译时确定block大小
- * 允许编译器进行更好的优化，如循环展开
+ * reduce_v6: 综合优化的归约实现
+ * 特点：结合了前几个版本的所有优化技术
+ * 优化策略：
+ * 1. 多元素预处理减少线程数量
+ * 2. 共享内存归约减少全局内存访问
+ * 3. Warp级别优化最后阶段
+ * 4. 模板化编译优化
+ * 5. 手动循环展开避免分支判断
+ * 性能：
  */
 
 // 模板化的warp归约函数
@@ -79,18 +85,18 @@ int main() {
   float *d_a;
   cudaMalloc((void **)&d_a, N * sizeof(float));
 
-  int block_size = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK / 2;
-  float *out = (float *)calloc(block_size, sizeof(float));
+  int block_num = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK / 2;
+  float *out = (float *)calloc(block_num, sizeof(float));
   float *d_out;
-  cudaMalloc((void **)&d_out, block_size * sizeof(float));
-  float *res = (float *)malloc(block_size * sizeof(float));
+  cudaMalloc((void **)&d_out, block_num * sizeof(float));
+  float *res = (float *)malloc(block_num * sizeof(float));
 
   for (int i = 0; i < N; ++i) {
     a[i] = i % 100;
   }
 
   // CPU上的规约
-  for (int i = 0; i < block_size; ++i) {
+  for (int i = 0; i < block_num; ++i) {
     float cur = 0;
     for (int j = 0; j < THREAD_PER_BLOCK * 2; j++) {
       cur += a[i * THREAD_PER_BLOCK * 2 + j];
@@ -100,15 +106,15 @@ int main() {
 
   cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
 
-  dim3 Grid(block_size, 1);
+  dim3 Grid(block_num, 1);
   dim3 Block(THREAD_PER_BLOCK, 1);
   reduce_v5<THREAD_PER_BLOCK><<<Grid, Block>>>(d_a, d_out, N);
-  cudaMemcpy(out, d_out, block_size * sizeof(float), cudaMemcpyDeviceToHost);
-  if (check(out, res, block_size))
+  cudaMemcpy(out, d_out, block_num * sizeof(float), cudaMemcpyDeviceToHost);
+  if (check(out, res, block_num))
     printf("the ans is right\n");
   else {
     printf("the ans is wrong\n");
-    for (int i = 0; i < block_size; i++) {
+    for (int i = 0; i < block_num; i++) {
       printf("%lf ", out[i]);
     }
     printf("\n");

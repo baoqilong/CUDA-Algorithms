@@ -4,9 +4,12 @@
 #include "reduce.cuh"
 
 /*
- * reduce_v2: 反向跨步的共享内存归约实现
- * 改进点：从正向跨步改为反向跨步，进一步优化线程利用率
- * 特点：线程访问模式更加规整，减少bank conflict
+ * reduce_v2: 反向跨步优化的归约实现
+ * 改进点：从正向跨步改为反向跨步归约模式
+ * 优势：
+ * - 线程访问更加规整，减少bank冲突
+ * - 内存访问模式更连续，提高cache命中率
+ * 技术细节：从大到小的归约策略（128->64->32->16->8->4->2->1）
  */
 
 __global__ void reduce_v2(float *d_in, float *d_out, int n) { 
@@ -46,18 +49,18 @@ int main() {
   float *d_a;
   cudaMalloc((void **)&d_a, N * sizeof(float));
 
-  int block_size = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK;
-  float *out = (float *)calloc(block_size, sizeof(float));
+  int block_num = (N + THREAD_PER_BLOCK - 1) / THREAD_PER_BLOCK;
+  float *out = (float *)calloc(block_num, sizeof(float));
   float *d_out;
-  cudaMalloc((void **)&d_out, block_size * sizeof(float));
-  float *res = (float *)malloc(block_size * sizeof(float));
+  cudaMalloc((void **)&d_out, block_num * sizeof(float));
+  float *res = (float *)malloc(block_num * sizeof(float));
 
   for (int i = 0; i < N; ++i) {
     a[i] = i % 100;
   }
 
   // CPU上的规约
-  for (int i = 0; i < block_size; ++i) {
+  for (int i = 0; i < block_num; ++i) {
     float cur = 0;
     for (int j = 0; j < THREAD_PER_BLOCK; j++) {
       cur += a[i * THREAD_PER_BLOCK + j];
@@ -67,15 +70,15 @@ int main() {
 
   cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
 
-  dim3 Grid(block_size, 1);
+  dim3 Grid(block_num, 1);
   dim3 Block(THREAD_PER_BLOCK, 1);
   reduce_v2<<<Grid, Block>>>(d_a, d_out, N);
-  cudaMemcpy(out, d_out, block_size * sizeof(float), cudaMemcpyDeviceToHost);
-  if (check(out, res, block_size))
+  cudaMemcpy(out, d_out, block_num * sizeof(float), cudaMemcpyDeviceToHost);
+  if (check(out, res, block_num))
     printf("the ans is right\n");
   else {
     printf("the ans is wrong\n");
-    for (int i = 0; i < block_size; i++) {
+    for (int i = 0; i < block_num; i++) {
       printf("%lf ", out[i]);
     }
     printf("\n");
